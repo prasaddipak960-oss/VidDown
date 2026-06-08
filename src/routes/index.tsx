@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { useMutation } from "@tanstack/react-query";
 import {
   Instagram,
   Music2,
@@ -13,22 +15,25 @@ import {
   RotateCw,
   Search,
   Menu,
+  Download,
+  AlertCircle,
 } from "lucide-react";
+import { downloadMedia, type DownloadResult } from "@/lib/api/download.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "InDown.io clone — Instagram Video Downloader" },
+      { title: "InDown.io clone — Instagram & TikTok Downloader" },
       {
         name: "description",
         content:
-          "Download Instagram videos, reels, photos, DP, stories and highlights — fast, free and anonymous.",
+          "Download Instagram and TikTok videos, reels, photos and stories — fast, free and anonymous.",
       },
-      { property: "og:title", content: "InDown.io clone — Instagram Video Downloader" },
+      { property: "og:title", content: "InDown.io clone — Instagram & TikTok Downloader" },
       {
         property: "og:description",
         content:
-          "Download Instagram videos, reels, photos, DP, stories and highlights — fast, free and anonymous.",
+          "Download Instagram and TikTok videos, reels, photos and stories — fast, free and anonymous.",
       },
     ],
   }),
@@ -60,53 +65,48 @@ function Index() {
   const [platform, setPlatform] = useState<Platform>("instagram");
   const [tab, setTab] = useState<IgTab>("video");
   const [url, setUrl] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+
+  const downloadFn = useServerFn(downloadMedia);
+  const mutation = useMutation<DownloadResult, Error, string>({
+    mutationFn: async (link: string) => downloadFn({ data: { url: link } }),
+  });
 
   const handlePaste = async () => {
     try {
       const text = await navigator.clipboard.readText();
       setUrl(text);
     } catch {
-      setMessage("Clipboard access denied. Paste manually.");
+      /* ignore */
     }
   };
 
   const handleClear = () => {
     setUrl("");
-    setMessage(null);
+    mutation.reset();
   };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage(null);
-    if (!url.trim()) {
-      setMessage("Please paste a valid link.");
-      return;
-    }
+    if (!url.trim()) return;
     const valid =
       platform === "instagram"
         ? /instagram\.com\//i.test(url)
         : /tiktok\.com\//i.test(url);
     if (!valid) {
-      setMessage(`Please paste a valid ${platform === "instagram" ? "Instagram" : "TikTok"} link.`);
+      mutation.reset();
+      alert(`Please paste a valid ${platform === "instagram" ? "Instagram" : "TikTok"} link.`);
       return;
     }
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      setMessage(
-        "Demo only — this UI does not actually fetch media. Backend integration required for downloads.",
-      );
-    }, 1200);
+    mutation.mutate(url.trim());
   };
 
   const heading =
     platform === "instagram" ? TITLES[tab] : "TikTok Video Downloader";
 
+  const result = mutation.data;
+
   return (
     <div className="min-h-screen bg-white text-slate-800">
-      {/* Header */}
       <header className="border-b border-slate-200">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
           <a href="/" className="text-2xl font-bold">
@@ -125,10 +125,9 @@ function Index() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 pb-12">
-        {/* Platform tabs */}
         <div className="mt-6 grid grid-cols-2 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
           <button
-            onClick={() => setPlatform("instagram")}
+            onClick={() => { setPlatform("instagram"); mutation.reset(); }}
             className={`flex items-center justify-center gap-2 py-4 text-sm font-semibold transition ${
               platform === "instagram"
                 ? "bg-white text-indigo-600 shadow-sm"
@@ -139,7 +138,7 @@ function Index() {
             INSTAGRAM
           </button>
           <button
-            onClick={() => setPlatform("tiktok")}
+            onClick={() => { setPlatform("tiktok"); mutation.reset(); }}
             className={`flex items-center justify-center gap-2 py-4 text-sm font-semibold transition ${
               platform === "tiktok"
                 ? "bg-white text-indigo-600 shadow-sm"
@@ -151,7 +150,6 @@ function Index() {
           </button>
         </div>
 
-        {/* Sub-tabs for Instagram */}
         {platform === "instagram" && (
           <>
             <p className="mt-8 text-center text-sm font-bold tracking-wide text-indigo-600">
@@ -179,7 +177,6 @@ function Index() {
           </>
         )}
 
-        {/* Downloader card */}
         <section className="mt-8 rounded-xl bg-slate-100 p-6 md:p-10">
           <h1 className="text-center text-2xl font-semibold text-slate-900 md:text-3xl">
             {heading}
@@ -218,67 +215,90 @@ function Index() {
             </div>
             <button
               type="submit"
-              disabled={loading}
+              disabled={mutation.isPending}
               className="flex items-center justify-center gap-2 rounded-md bg-blue-600 px-8 py-3 text-sm font-bold uppercase tracking-wide text-white hover:bg-blue-700 disabled:opacity-70 md:min-w-[260px]"
             >
-              {loading ? (
+              {mutation.isPending ? (
                 <RotateCw className="h-4 w-4 animate-spin" />
               ) : (
                 <Search className="h-4 w-4" />
               )}
-              {loading ? "Loading..." : "Search"}
+              {mutation.isPending ? "Loading..." : "Search"}
             </button>
           </form>
 
-          {message && (
-            <p className="mt-4 rounded-md bg-amber-50 px-4 py-3 text-center text-sm text-amber-800">
-              {message}
-            </p>
+          {mutation.isError && (
+            <div className="mt-4 flex items-start gap-2 rounded-md bg-red-50 px-4 py-3 text-sm text-red-800">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <span>{mutation.error.message}</span>
+            </div>
+          )}
+
+          {result && (
+            <div className="mt-6 rounded-lg border border-slate-200 bg-white p-4 md:p-6">
+              <div className="flex flex-col gap-4 md:flex-row">
+                {result.thumbnail && (
+                  <img
+                    src={`/api/proxy?url=${encodeURIComponent(result.thumbnail)}&filename=thumbnail.jpg`}
+                    alt="thumbnail"
+                    className="h-48 w-full rounded-md object-cover md:h-56 md:w-56"
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  {result.author && (
+                    <p className="text-sm font-medium text-indigo-600">@{result.author}</p>
+                  )}
+                  {result.title && (
+                    <p className="mt-1 line-clamp-3 text-sm text-slate-700">{result.title}</p>
+                  )}
+                  <p className="mt-3 text-xs uppercase tracking-wide text-slate-500">
+                    {result.media.length} file{result.media.length === 1 ? "" : "s"} found
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {result.media.map((m, i) => {
+                      const ext = m.type === "video" ? "mp4" : "jpg";
+                      const fname = `${result.platform}_${i + 1}.${ext}`;
+                      const href = `/api/proxy?url=${encodeURIComponent(m.url)}&filename=${encodeURIComponent(fname)}`;
+                      return (
+                        <a
+                          key={i}
+                          href={href}
+                          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                        >
+                          <Download className="h-4 w-4" />
+                          {m.type === "video" ? "Video" : "Photo"} {result.media.length > 1 ? i + 1 : ""}
+                          {m.quality ? ` · ${m.quality}` : ""}
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
         </section>
 
-        {/* SEO content */}
         <article className="prose prose-slate mt-12 max-w-none">
           <h2 className="text-center text-2xl font-bold text-indigo-600 md:text-3xl">
-            {platform === "instagram"
-              ? "Instagram Video Download"
-              : "TikTok Video Download"}
+            {platform === "instagram" ? "Instagram Video Download" : "TikTok Video Download"}
           </h2>
           <p className="mt-4 text-slate-700">
-            {platform === "instagram"
-              ? "Instagram is one of the most popular social media platforms. While scrolling your feed you often find videos you wish to keep — but Instagram does not let you download them directly."
-              : "TikTok is full of short, addictive videos. Sometimes you want to save them for offline viewing — this tool helps you grab them quickly."}
+            Paste any public Instagram or TikTok link above and click Search.
+            We fetch the media on our server and stream it back to you — no app
+            install, no login, no signup.
           </p>
-          <p className="mt-3 text-slate-700">
-            Our downloader is a web-based tool, so you don't need to install any
-            additional app. It's fast, anonymous and works on any device — phone,
-            tablet or desktop.
-          </p>
-
-          <h3 className="mt-8 text-xl font-semibold text-slate-900">
-            How to use the downloader
-          </h3>
+          <h3 className="mt-8 text-xl font-semibold text-slate-900">How to use</h3>
           <ol className="mt-3 list-decimal space-y-2 pl-6 text-slate-700">
-            <li>Copy the link of the post you want to download.</li>
+            <li>Copy the link of the post or video.</li>
             <li>Paste it in the box above.</li>
-            <li>Click the Search button.</li>
-            <li>Tap Download on the result.</li>
+            <li>Click Search.</li>
+            <li>Tap the Download button on the result.</li>
           </ol>
-
-          <h3 className="mt-8 text-xl font-semibold text-slate-900">
-            Features
-          </h3>
-          <ul className="mt-3 list-disc space-y-2 pl-6 text-slate-700">
-            <li>Download videos, reels, photos, DP, stories and highlights.</li>
-            <li>No login or signup required.</li>
-            <li>Free and unlimited downloads.</li>
-            <li>Works on Android, iOS, Windows and Mac.</li>
-          </ul>
         </article>
       </main>
 
       <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-500">
-        © {new Date().getFullYear()} InDown.io clone — built for demo purposes.
+        © {new Date().getFullYear()} InDown.io clone — for personal/educational use only.
       </footer>
     </div>
   );
