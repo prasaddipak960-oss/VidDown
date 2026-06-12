@@ -307,17 +307,36 @@ function Index() {
                     {result.media.map((m, i) => {
                       const ext = m.type === "video" ? "mp4" : "jpg";
                       const fname = `${result.platform}_${i + 1}.${ext}`;
-                      const href = `/api/proxy?url=${encodeURIComponent(m.url)}&filename=${encodeURIComponent(fname)}`;
+                      const active = !!dlActive[i];
+                      const progress = dlProgress[i] ?? 0;
                       return (
-                        <a
-                          key={i}
-                          href={href}
-                          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-                        >
-                          <Download className="h-4 w-4" />
-                          {m.type === "video" ? "Video" : "Photo"} {result.media.length > 1 ? i + 1 : ""}
-                          {m.quality ? ` · ${m.quality}` : ""}
-                        </a>
+                        <div key={i} className="flex flex-col gap-1 min-w-[180px]">
+                          <button
+                            type="button"
+                            onClick={() => handleDownload(i, m.url, fname)}
+                            disabled={active}
+                            className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-70"
+                          >
+                            {active ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Download className="h-4 w-4" />
+                            )}
+                            {active
+                              ? progress >= 0
+                                ? `Downloading… ${progress}%`
+                                : "Downloading…"
+                              : `${m.type === "video" ? "Video" : "Photo"} ${result.media.length > 1 ? i + 1 : ""}${m.quality ? ` · ${m.quality}` : ""}`}
+                          </button>
+                          {active && progress >= 0 && (
+                            <div className="h-1.5 w-full rounded-full bg-slate-200 overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-blue-500 transition-all"
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
