@@ -24,13 +24,13 @@ import { downloadMedia, type DownloadResult } from "@/lib/api/download.functions
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "InDown.io clone — Instagram & TikTok Downloader" },
+      { title: "VidDown.io — Instagram & TikTok Downloader" },
       {
         name: "description",
         content:
           "Download Instagram and TikTok videos, reels, photos and stories — fast, free and anonymous.",
       },
-      { property: "og:title", content: "InDown.io clone — Instagram & TikTok Downloader" },
+      { property: "og:title", content: "VidDown.io — Instagram & TikTok Downloader" },
       {
         property: "og:description",
         content:
@@ -159,7 +159,7 @@ function Index() {
       <header className="border-b border-slate-200">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
           <a href="/" className="text-2xl font-bold">
-            <span className="text-pink-500">In</span>
+            <span className="text-pink-500">Vid</span>
             <span className="text-slate-900">Down.io</span>
           </a>
           <nav className="hidden items-center gap-7 text-sm font-medium md:flex">
@@ -366,7 +366,7 @@ function Index() {
       </main>
 
       <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-500">
-        © {new Date().getFullYear()} InDown.io clone — for personal/educational use only.
+        © {new Date().getFullYear()} VidDown.io — for personal/educational use only.
       </footer>
     </div>
   );
