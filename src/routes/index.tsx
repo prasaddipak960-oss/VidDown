@@ -66,6 +66,8 @@ function Index() {
   const [platform, setPlatform] = useState<Platform>("instagram");
   const [tab, setTab] = useState<IgTab>("video");
   const [url, setUrl] = useState("");
+  const [dlProgress, setDlProgress] = useState<Record<number, number>>({});
+  const [dlActive, setDlActive] = useState<Record<number, boolean>>({});
 
   const downloadFn = useServerFn(downloadMedia);
   const mutation = useMutation<DownloadResult, Error, string>({
@@ -84,6 +86,8 @@ function Index() {
   const handleClear = () => {
     setUrl("");
     mutation.reset();
+    setDlProgress({});
+    setDlActive({});
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -100,6 +104,50 @@ function Index() {
     }
     mutation.mutate(url.trim());
   };
+
+  const handleDownload = useCallback(
+    async (index: number, mediaUrl: string, filename: string) => {
+      setDlActive((prev) => ({ ...prev, [index]: true }));
+      setDlProgress((prev) => ({ ...prev, [index]: 0 }));
+      try {
+        const proxyUrl = `/api/proxy?url=${encodeURIComponent(mediaUrl)}&filename=${encodeURIComponent(filename)}`;
+        const response = await fetch(proxyUrl);
+        if (!response.ok || !response.body) {
+          throw new Error(`Download failed: ${response.status}`);
+        }
+        const total = parseInt(response.headers.get("Content-Length") || "0", 10);
+        const reader = response.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let received = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          received += value.length;
+          if (total > 0) {
+            setDlProgress((prev) => ({ ...prev, [index]: Math.round((received / total) * 100) }));
+          } else {
+            setDlProgress((prev) => ({ ...prev, [index]: -1 })); // indeterminate
+          }
+        }
+        const blob = new Blob(chunks);
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+        setDlProgress((prev) => ({ ...prev, [index]: 100 }));
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "Download failed");
+      } finally {
+        setDlActive((prev) => ({ ...prev, [index]: false }));
+      }
+    },
+    []
+  );
 
   const heading =
     platform === "instagram" ? TITLES[tab] : "TikTok Video Downloader";
