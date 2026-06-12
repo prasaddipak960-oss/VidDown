@@ -18,13 +18,16 @@ export const Route = createFileRoute("/api/proxy")({
             return new Response(`Upstream error ${upstream.status}`, { status: 502 });
           }
           const contentType = upstream.headers.get("content-type") || "application/octet-stream";
+          const contentLength = upstream.headers.get("content-length");
+          const headers: Record<string, string> = {
+            "Content-Type": contentType,
+            "Content-Disposition": `attachment; filename="${filename}"`,
+            "Cache-Control": "no-store",
+          };
+          if (contentLength) headers["Content-Length"] = contentLength;
           return new Response(upstream.body, {
             status: 200,
-            headers: {
-              "Content-Type": contentType,
-              "Content-Disposition": `attachment; filename="${filename}"`,
-              "Cache-Control": "no-store",
-            },
+            headers,
           });
         } catch (e) {
           return new Response("Proxy failed", { status: 500 });
