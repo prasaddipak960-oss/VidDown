@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -17,6 +17,7 @@ import {
   Menu,
   Download,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { downloadMedia, type DownloadResult } from "@/lib/api/download.functions";
 
