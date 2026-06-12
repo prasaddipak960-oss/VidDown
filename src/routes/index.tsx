@@ -130,7 +130,7 @@ function Index() {
             setDlProgress((prev) => ({ ...prev, [index]: -1 })); // indeterminate
           }
         }
-        const blob = new Blob(chunks);
+        const blob = new Blob(chunks as BlobPart[]);
         const blobUrl = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = blobUrl;
