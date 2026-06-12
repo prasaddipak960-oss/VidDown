@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -17,6 +17,7 @@ import {
   Menu,
   Download,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { downloadMedia, type DownloadResult } from "@/lib/api/download.functions";
 
@@ -65,6 +66,8 @@ function Index() {
   const [platform, setPlatform] = useState<Platform>("instagram");
   const [tab, setTab] = useState<IgTab>("video");
   const [url, setUrl] = useState("");
+  const [dlProgress, setDlProgress] = useState<Record<number, number>>({});
+  const [dlActive, setDlActive] = useState<Record<number, boolean>>({});
 
   const downloadFn = useServerFn(downloadMedia);
   const mutation = useMutation<DownloadResult, Error, string>({
@@ -83,6 +86,8 @@ function Index() {
   const handleClear = () => {
     setUrl("");
     mutation.reset();
+    setDlProgress({});
+    setDlActive({});
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -99,6 +104,50 @@ function Index() {
     }
     mutation.mutate(url.trim());
   };
+
+  const handleDownload = useCallback(
+    async (index: number, mediaUrl: string, filename: string) => {
+      setDlActive((prev) => ({ ...prev, [index]: true }));
+      setDlProgress((prev) => ({ ...prev, [index]: 0 }));
+      try {
+        const proxyUrl = `/api/proxy?url=${encodeURIComponent(mediaUrl)}&filename=${encodeURIComponent(filename)}`;
+        const response = await fetch(proxyUrl);
+        if (!response.ok || !response.body) {
+          throw new Error(`Download failed: ${response.status}`);
+        }
+        const total = parseInt(response.headers.get("Content-Length") || "0", 10);
+        const reader = response.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let received = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          received += value.length;
+          if (total > 0) {
+            setDlProgress((prev) => ({ ...prev, [index]: Math.round((received / total) * 100) }));
+          } else {
+            setDlProgress((prev) => ({ ...prev, [index]: -1 })); // indeterminate
+          }
+        }
+        const blob = new Blob(chunks as BlobPart[]);
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+        setDlProgress((prev) => ({ ...prev, [index]: 100 }));
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "Download failed");
+      } finally {
+        setDlActive((prev) => ({ ...prev, [index]: false }));
+      }
+    },
+    []
+  );
 
   const heading =
     platform === "instagram" ? TITLES[tab] : "TikTok Video Downloader";
@@ -258,17 +307,36 @@ function Index() {
                     {result.media.map((m, i) => {
                       const ext = m.type === "video" ? "mp4" : "jpg";
                       const fname = `${result.platform}_${i + 1}.${ext}`;
-                      const href = `/api/proxy?url=${encodeURIComponent(m.url)}&filename=${encodeURIComponent(fname)}`;
+                      const active = !!dlActive[i];
+                      const progress = dlProgress[i] ?? 0;
                       return (
-                        <a
-                          key={i}
-                          href={href}
-                          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-                        >
-                          <Download className="h-4 w-4" />
-                          {m.type === "video" ? "Video" : "Photo"} {result.media.length > 1 ? i + 1 : ""}
-                          {m.quality ? ` · ${m.quality}` : ""}
-                        </a>
+                        <div key={i} className="flex flex-col gap-1 min-w-[180px]">
+                          <button
+                            type="button"
+                            onClick={() => handleDownload(i, m.url, fname)}
+                            disabled={active}
+                            className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-70"
+                          >
+                            {active ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Download className="h-4 w-4" />
+                            )}
+                            {active
+                              ? progress >= 0
+                                ? `Downloading… ${progress}%`
+                                : "Downloading…"
+                              : `${m.type === "video" ? "Video" : "Photo"} ${result.media.length > 1 ? i + 1 : ""}${m.quality ? ` · ${m.quality}` : ""}`}
+                          </button>
+                          {active && progress >= 0 && (
+                            <div className="h-1.5 w-full rounded-full bg-slate-200 overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-blue-500 transition-all"
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
